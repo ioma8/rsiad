@@ -1,0 +1,9 @@
+[package]
+name = "rsiad"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+spin_sleep = "1.3.2"
+xsynth-core = "0.3.3"
+xsynth-realtime = "0.3.3"
