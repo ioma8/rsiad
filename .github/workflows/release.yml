@@ -31,9 +31,14 @@ jobs:
     - name: Zip audio files
       run: zip archive.zip *.mp3
 
+    - name: Generate tag
+      id: tag
+      run: echo "tag_name=release-$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+
     - name: Release
       uses: softprops/action-gh-release@v1
       with:
+        tag_name: ${{ steps.tag.outputs.tag_name }}
         files: |
           archive.zip
           bass.mp3
