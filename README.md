@@ -1,5 +1,7 @@
 # 🎶 RSIAD - Rust Triad 🎶
 
+[![CI](https://github.com/ioma8/rsiad/actions/workflows/ci.yml/badge.svg)](https://github.com/ioma8/rsiad/actions/workflows/ci.yml)
+
 A simple command-line tool for singers to warm up their voices, especially for opera. 🎤 It plays musical triads as a pitch reference for vocal exercises.
 
 ## 🚀 Getting Started
