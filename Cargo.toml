@@ -9,3 +9,5 @@ xsynth-core = "0.3.3"
 hound = "3.5.1"
 crossbeam-channel = "0.5.13"
 mp3lame-encoder = "0.2.1"
+xsynth-realtime = "0.3.3"
+clap = { version = "4.5.8", features = ["derive"] }
