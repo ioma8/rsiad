@@ -2,7 +2,7 @@ mod config;
 mod render;
 mod writer;
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use std::fs::File;
 use std::io::Read;
 use std::sync::Arc;
@@ -23,12 +23,46 @@ const SF_PATH: &str = "UprightPianoKW-small-bright-20190703.sf2";
 const WAV_OUTPUT_PATH: &str = "output.wav";
 const MP3_OUTPUT_PATH: &str = "output.mp3";
 
+#[derive(Copy, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+enum ToneRange {
+    Bass,
+    Baritone,
+    Tenor,
+    Alto,
+    MezzoSoprano,
+    Soprano,
+}
+
+fn get_tone_range(range: Option<ToneRange>) -> (u8, u8) {
+    match range {
+        Some(ToneRange::Bass) => (note_string_to_key("E2"), note_string_to_key("E4")),
+        Some(ToneRange::Baritone) => (note_string_to_key("A2"), note_string_to_key("A4")),
+        Some(ToneRange::Tenor) => (note_string_to_key("C3"), note_string_to_key("C5")),
+        Some(ToneRange::Alto) => (note_string_to_key("F3"), note_string_to_key("F5")),
+        Some(ToneRange::MezzoSoprano) => (note_string_to_key("A3"), note_string_to_key("A5")),
+        Some(ToneRange::Soprano) => (note_string_to_key("C4"), note_string_to_key("C6")),
+        None => (note_string_to_key("G2"), note_string_to_key("G3")),
+    }
+}
+
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
     /// Whether to save the output to an MP3 file
     #[arg(short, long)]
     save: bool,
+    /// Duration of the note in seconds
+    #[arg(short, long, default_value_t = 0.7)]
+    duration: f64,
+    /// Starting key of the range
+    #[arg(short, long)]
+    from: Option<String>,
+    /// Ending key of the range
+    #[arg(short, long)]
+    to: Option<String>,
+    /// Tone range of the singer
+    #[arg(short, long, value_enum)]
+    range: Option<ToneRange>,
 }
 
 trait Player {
@@ -162,14 +196,44 @@ fn main() {
         let synth = RealtimeSynth::open_with_all_defaults();
         let params = synth.stream_params();
         let sender = synth.get_sender_ref().clone();
-        (Box::new(RealtimePlayer { sender, _synth: synth }), params)
+        (
+            Box::new(RealtimePlayer {
+                sender,
+                _synth: synth,
+            }),
+            params,
+        )
     };
 
     player.load_soundfont(params);
 
-    play_triads_from(player.as_mut(), note_to_key("G", 2), note_to_key("G", 3));
+    let (range_from, range_to) = get_tone_range(args.range);
+    let key_from = if let Some(from) = &args.from {
+        note_string_to_key(from)
+    } else {
+        range_from
+    };
+
+    let key_to = if let Some(to) = &args.to {
+        note_string_to_key(to)
+    } else {
+        range_to
+    };
+
+    println!(
+        "Playing triads from {} to {}",
+        key_from, key_to
+    );
+
+    play_triads_from(player.as_mut(), key_from, key_to, args.duration);
 
     player.finalize();
+}
+
+fn note_string_to_key(note_string: &str) -> u8 {
+    let note = note_string.trim_end_matches(char::is_numeric);
+    let octave = note_string.chars().last().unwrap_or('0').to_digit(10).unwrap_or(0) as u8;
+    note_to_key(note, octave)
 }
 
 fn note_to_key(note: &str, octave: u8) -> u8 {
@@ -195,19 +259,19 @@ fn get_major_chord(key: u8) -> Vec<u8> {
     vec![key, key + 4, key + 7] // Root, Major 3rd, Perfect 5th
 }
 
-fn play_triad(player: &mut dyn Player, key: u8) {
+fn play_triad(player: &mut dyn Player, key: u8, note_duration: f64) {
     let chord = get_major_chord(key);
     let triad = vec![chord[0], chord[1], chord[2], chord[1], chord[0]];
     for &key in &triad {
-        player.play_note(key, 0.7);
+        player.play_note(key, note_duration);
     }
-    player.wait(0.7);
-    player.play_chord(&chord, 1.4);
+    player.wait(note_duration);
+    player.play_chord(&chord, note_duration * 2.0);
 }
 
-fn play_triads_from(player: &mut dyn Player, key_from: u8, key_to: u8) {
+fn play_triads_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) {
     for i in key_from..=key_to {
-        play_triad(player, i);
+        play_triad(player, i, note_duration);
     }
 }
 
@@ -240,10 +304,7 @@ fn convert_wav_to_mp3(wav_path: &str, mp3_path: &str) -> Result<(), std::io::Err
     };
 
     let mut mp3_buffer = Vec::new();
-    mp3_buffer.resize(
-        mp3lame_encoder::max_required_buffer_size(pcm_left.len()),
-        0,
-    );
+    mp3_buffer.resize(mp3lame_encoder::max_required_buffer_size(pcm_left.len()), 0);
     let mut mp3_buffer_uninit = unsafe {
         std::mem::transmute::<&mut [u8], &mut [std::mem::MaybeUninit<u8>]>(&mut mp3_buffer)
     };
