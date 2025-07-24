@@ -28,10 +28,14 @@ jobs:
         ./target/release/rsiad --save mezzo-soprano.mp3 --range mezzo-soprano
         ./target/release/rsiad --save soprano.mp3 --range soprano
 
+    - name: Zip audio files
+      run: zip archive.zip *.mp3
+
     - name: Release
       uses: softprops/action-gh-release@v1
       with:
         files: |
+          archive.zip
           bass.mp3
           baritone.mp3
           tenor.mp3
