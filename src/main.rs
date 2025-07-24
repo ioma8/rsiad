@@ -34,6 +34,7 @@ trait Player {
     fn play_note(&mut self, key: u8, duration: f64);
     fn play_chord(&mut self, keys: &[u8], duration: f64);
     fn load_soundfont(&mut self, params: AudioStreamParams);
+    fn wait(&mut self, duration: f64);
     fn finalize(self: Box<Self>);
 }
 
@@ -47,7 +48,7 @@ impl Player for RealtimePlayer {
             0,
             ChannelEvent::Audio(ChannelAudioEvent::NoteOn { key, vel: 127 }),
         ));
-        spin_sleep::sleep(Duration::from_secs_f64(duration));
+        self.wait(duration);
         self.sender.send_event(SynthEvent::Channel(
             0,
             ChannelEvent::Audio(ChannelAudioEvent::NoteOff { key }),
@@ -61,7 +62,7 @@ impl Player for RealtimePlayer {
                 ChannelEvent::Audio(ChannelAudioEvent::NoteOn { key, vel: 127 }),
             ));
         }
-        spin_sleep::sleep(Duration::from_secs_f64(duration));
+        self.wait(duration);
         for &key in keys {
             self.sender.send_event(SynthEvent::Channel(
                 0,
@@ -83,6 +84,10 @@ impl Player for RealtimePlayer {
             )));
     }
 
+    fn wait(&mut self, duration: f64) {
+        spin_sleep::sleep(Duration::from_secs_f64(duration));
+    }
+
     fn finalize(self: Box<Self>) {}
 }
 
@@ -96,7 +101,7 @@ impl Player for FilePlayer {
             0,
             ChannelEvent::Audio(ChannelAudioEvent::NoteOn { key, vel: 127 }),
         ));
-        self.synth.render_batch(duration);
+        self.wait(duration);
         self.synth.send_event(SynthEvent::Channel(
             0,
             ChannelEvent::Audio(ChannelAudioEvent::NoteOff { key }),
@@ -110,7 +115,7 @@ impl Player for FilePlayer {
                 ChannelEvent::Audio(ChannelAudioEvent::NoteOn { key, vel: 127 }),
             ));
         }
-        self.synth.render_batch(duration);
+        self.wait(duration);
         for &key in keys {
             self.synth.send_event(SynthEvent::Channel(
                 0,
@@ -130,6 +135,10 @@ impl Player for FilePlayer {
             .send_event(SynthEvent::AllChannels(ChannelEvent::Config(
                 ChannelConfigEvent::SetSoundfonts(soundfonts),
             )));
+    }
+
+    fn wait(&mut self, duration: f64) {
+        self.synth.render_batch(duration);
     }
 
     fn finalize(self: Box<Self>) {
@@ -190,7 +199,7 @@ fn play_triad(player: &mut dyn Player, key: u8) {
     for &key in &triad {
         player.play_note(key, 0.7);
     }
-    spin_sleep::sleep(Duration::from_secs_f64(0.7));
+    player.wait(0.7);
     player.play_chord(&chord, 1.4);
 }
 
