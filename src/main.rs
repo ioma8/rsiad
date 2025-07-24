@@ -16,7 +16,7 @@ use xsynth_core::{
     soundfont::{SampleSoundfont, SoundfontBase},
     AudioStreamParams,
 };
-use xsynth_realtime::{RealtimeEventSender, RealtimeSynth};
+use xsynth_realtime::{RealtimeEventSender, RealtimeSynth, XSynthRealtimeConfig, ThreadCount};
 
 //const SF_PATH: &str = "Yamaha_C3_Grand_Piano.sf2";
 const SF_PATH: &str = "UprightPianoKW-small-bright-20190703.sf2";
@@ -217,7 +217,12 @@ fn main() {
         convert_wav_to_mp3(WAV_OUTPUT_PATH, &player.save_path).unwrap();
         println!("Done!");
     } else {
-        let synth = RealtimeSynth::open_with_all_defaults();
+                        let config = XSynthRealtimeConfig {
+            multithreading: ThreadCount::Auto,
+            render_window_ms: 50.0,
+            ..Default::default()
+        };
+        let synth = RealtimeSynth::open_with_default_output(config);
         let params = synth.stream_params();
         let sender = synth.get_sender_ref().clone();
         let mut player = Box::new(RealtimePlayer {

@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get install -y libasound2-dev libudev-dev
+
+    - name: Build
+      run: cargo build --release --verbose
+
+    - name: Generate audio files
+      run: |
+        ./target/release/rsiad --save bass.mp3 --range bass
+        ./target/release/rsiad --save baritone.mp3 --range baritone
+        ./target/release/rsiad --save tenor.mp3 --range tenor
+        ./target/release/rsiad --save alto.mp3 --range alto
+        ./target/release/rsiad --save mezzo-soprano.mp3 --range mezzo-soprano
+        ./target/release/rsiad --save soprano.mp3 --range soprano
+
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          bass.mp3
+          baritone.mp3
+          tenor.mp3
+          alto.mp3
+          mezzo-soprano.mp3
+          soprano.mp3
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
