@@ -208,20 +208,13 @@ fn convert_wav_to_mp3(wav_path: &str, mp3_path: &str) -> Result<(), std::io::Err
     let mut mp3_file = File::create(mp3_path)?;
 
     let wav = hound::WavReader::new(&wav_data[..]).unwrap();
-    let samples: Vec<i16> = wav
-        .into_samples::<f32>()
-        .map(|s| (s.unwrap() * std::i16::MAX as f32) as i16)
-        .collect();
-
+    let mut samples = wav.into_samples::<f32>();
     let mut pcm_left = Vec::new();
     let mut pcm_right = Vec::new();
 
-    for (i, sample) in samples.iter().enumerate() {
-        if i % 2 == 0 {
-            pcm_left.push(*sample);
-        } else {
-            pcm_right.push(*sample);
-        }
+    while let (Some(left), Some(right)) = (samples.next(), samples.next()) {
+        pcm_left.push((left.unwrap() * std::i16::MAX as f32) as i16);
+        pcm_right.push((right.unwrap() * std::i16::MAX as f32) as i16);
     }
 
     let mut encoder = Builder::new().expect("Create LAME builder");
