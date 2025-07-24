@@ -3,6 +3,7 @@ mod render;
 mod writer;
 
 use clap::Parser;
+use cpal::traits::{DeviceTrait, HostTrait};
 use std::fs::File;
 use std::io::Read;
 use std::sync::Arc;
@@ -16,7 +17,7 @@ use xsynth_core::{
     soundfont::{SampleSoundfont, SoundfontBase},
     AudioStreamParams,
 };
-use xsynth_realtime::{RealtimeEventSender, RealtimeSynth};
+use xsynth_realtime::{RealtimeEventSender, RealtimeSynth, XSynthRealtimeConfig};
 
 const SF_PATH: &str = "Yamaha_C3_Grand_Piano.sf2";
 const WAV_OUTPUT_PATH: &str = "output.wav";
@@ -40,6 +41,7 @@ trait Player {
 
 struct RealtimePlayer {
     sender: RealtimeEventSender,
+    _synth: RealtimeSynth,
 }
 
 impl Player for RealtimePlayer {
@@ -167,10 +169,14 @@ fn main() {
         let params = synth.get_params();
         (Box::new(FilePlayer { synth }), params)
     } else {
-        let synth = RealtimeSynth::open_with_all_defaults();
+        let host = cpal::default_host();
+        let device = host.output_devices().unwrap().next().expect("no output device available");
+        let stream_config = device.default_output_config().unwrap();
+        let config = XSynthRealtimeConfig::default();
+        let synth = RealtimeSynth::open(config, &device, stream_config);
         let params = synth.stream_params();
         let sender = synth.get_sender_ref().clone();
-        (Box::new(RealtimePlayer { sender }), params)
+        (Box::new(RealtimePlayer { sender, _synth: synth }), params)
     };
 
     player.load_soundfont(params);
