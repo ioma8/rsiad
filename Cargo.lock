@@ -991,6 +991,7 @@ name = "rsiad"
 version = "0.1.0"
 dependencies = [
  "clap 4.5.41",
+ "cpal",
  "crossbeam-channel",
  "hound",
  "mp3lame-encoder",

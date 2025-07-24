@@ -3,7 +3,6 @@ mod render;
 mod writer;
 
 use clap::Parser;
-use cpal::traits::{DeviceTrait, HostTrait};
 use std::fs::File;
 use std::io::Read;
 use std::sync::Arc;
@@ -12,14 +11,15 @@ use std::time::Duration;
 use crate::render::XSynthRender;
 use mp3lame_encoder::{Builder, DualPcm, FlushNoGap, Quality};
 use xsynth_core::{
-    channel::{ChannelAudioEvent, ChannelConfigEvent, ChannelEvent, ControlEvent},
+    channel::{ChannelAudioEvent, ChannelConfigEvent, ChannelEvent},
     channel_group::SynthEvent,
     soundfont::{SampleSoundfont, SoundfontBase},
     AudioStreamParams,
 };
-use xsynth_realtime::{RealtimeEventSender, RealtimeSynth, XSynthRealtimeConfig};
+use xsynth_realtime::{RealtimeEventSender, RealtimeSynth};
 
-const SF_PATH: &str = "Yamaha_C3_Grand_Piano.sf2";
+//const SF_PATH: &str = "Yamaha_C3_Grand_Piano.sf2";
+const SF_PATH: &str = "UprightPianoKW-small-bright-20190703.sf2";
 const WAV_OUTPUT_PATH: &str = "output.wav";
 const MP3_OUTPUT_PATH: &str = "output.mp3";
 
@@ -32,7 +32,7 @@ struct Args {
 }
 
 trait Player {
-    fn play_note(&mut self, key: u8, duration: f64, pan: f32);
+    fn play_note(&mut self, key: u8, duration: f64);
     fn play_chord(&mut self, keys: &[u8], duration: f64);
     fn load_soundfont(&mut self, params: AudioStreamParams);
     fn wait(&mut self, duration: f64);
@@ -45,12 +45,7 @@ struct RealtimePlayer {
 }
 
 impl Player for RealtimePlayer {
-    fn play_note(&mut self, key: u8, duration: f64, pan: f32) {
-        let pan_value = ((pan + 1.0) / 2.0 * 127.0) as u8;
-        self.sender.send_event(SynthEvent::Channel(
-            0,
-            ChannelEvent::Audio(ChannelAudioEvent::Control(ControlEvent::Raw(10, pan_value))),
-        ));
+    fn play_note(&mut self, key: u8, duration: f64) {
         self.sender.send_event(SynthEvent::Channel(
             0,
             ChannelEvent::Audio(ChannelAudioEvent::NoteOn { key, vel: 127 }),
@@ -103,12 +98,7 @@ struct FilePlayer {
 }
 
 impl Player for FilePlayer {
-    fn play_note(&mut self, key: u8, duration: f64, pan: f32) {
-        let pan_value = ((pan + 1.0) / 2.0 * 127.0) as u8;
-        self.synth.send_event(SynthEvent::Channel(
-            0,
-            ChannelEvent::Audio(ChannelAudioEvent::Control(ControlEvent::Raw(10, pan_value))),
-        ));
+    fn play_note(&mut self, key: u8, duration: f64) {
         self.synth.send_event(SynthEvent::Channel(
             0,
             ChannelEvent::Audio(ChannelAudioEvent::NoteOn { key, vel: 127 }),
@@ -169,11 +159,7 @@ fn main() {
         let params = synth.get_params();
         (Box::new(FilePlayer { synth }), params)
     } else {
-        let host = cpal::default_host();
-        let device = host.output_devices().unwrap().next().expect("no output device available");
-        let stream_config = device.default_output_config().unwrap();
-        let config = XSynthRealtimeConfig::default();
-        let synth = RealtimeSynth::open(config, &device, stream_config);
+        let synth = RealtimeSynth::open_with_all_defaults();
         let params = synth.stream_params();
         let sender = synth.get_sender_ref().clone();
         (Box::new(RealtimePlayer { sender, _synth: synth }), params)
@@ -212,10 +198,8 @@ fn get_major_chord(key: u8) -> Vec<u8> {
 fn play_triad(player: &mut dyn Player, key: u8) {
     let chord = get_major_chord(key);
     let triad = vec![chord[0], chord[1], chord[2], chord[1], chord[0]];
-    let mut pan = -0.5;
     for &key in &triad {
-        player.play_note(key, 0.7, pan);
-        pan *= -1.0;
+        player.play_note(key, 0.7);
     }
     player.wait(0.7);
     player.play_chord(&chord, 1.4);

@@ -1,6 +1,5 @@
 use xsynth_core::{
     channel_group::{ChannelGroup, SynthEvent},
-    effects::VolumeLimiter,
     AudioPipe, AudioStreamParams,
 };
 
@@ -18,7 +17,6 @@ pub struct XSynthRender {
     config: XSynthRenderConfig,
     channel_group: ChannelGroup,
     audio_writer: AudioFileWriter,
-    limiter: Option<VolumeLimiter>,
     render_elements: BatchRenderElements,
 }
 
@@ -30,19 +28,10 @@ impl XSynthRender {
 
         let audio_writer = AudioFileWriter::new(config.clone(), out_path);
 
-        let limiter = if config.use_limiter {
-            Some(VolumeLimiter::new(
-                config.group_options.audio_params.channels.count(),
-            ))
-        } else {
-            None
-        };
-
         Self {
             config,
             channel_group,
             audio_writer,
-            limiter,
             render_elements: BatchRenderElements {
                 output_vec: vec![0.0],
                 missed_samples: 0.0,
@@ -88,10 +77,6 @@ impl XSynthRender {
             self.channel_group
                 .read_samples(&mut self.render_elements.output_vec);
 
-            if let Some(limiter) = &mut self.limiter {
-                limiter.limit(&mut self.render_elements.output_vec);
-            }
-
             self.audio_writer
                 .write_samples(&mut self.render_elements.output_vec);
         }
@@ -107,10 +92,6 @@ impl XSynthRender {
             self.channel_group
                 .read_samples(&mut self.render_elements.output_vec);
 
-            if let Some(limiter) = &mut self.limiter {
-                limiter.limit(&mut self.render_elements.output_vec);
-            }
-
             let mut is_empty = true;
             for s in &self.render_elements.output_vec {
                 if *s > 0.0001 || *s < -0.0001 {
@@ -124,11 +105,6 @@ impl XSynthRender {
             self.audio_writer
                 .write_samples(&mut self.render_elements.output_vec);
         }
-    }
-
-    /// Returns the active voice count of the MIDI synthesizer.
-    pub fn voice_count(&self) -> u64 {
-        self.channel_group.voice_count()
     }
 }
 
