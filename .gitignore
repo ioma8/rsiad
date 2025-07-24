@@ -1,4 +1,4 @@
 /target
 tmp/
-output.mp3
-output.wav
+*.mp3
+*.wav

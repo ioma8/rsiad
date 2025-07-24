@@ -21,7 +21,6 @@ use xsynth_realtime::{RealtimeEventSender, RealtimeSynth};
 //const SF_PATH: &str = "Yamaha_C3_Grand_Piano.sf2";
 const SF_PATH: &str = "UprightPianoKW-small-bright-20190703.sf2";
 const WAV_OUTPUT_PATH: &str = "output.wav";
-const MP3_OUTPUT_PATH: &str = "output.mp3";
 
 #[derive(Copy, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 enum ToneRange {
@@ -41,16 +40,16 @@ fn get_tone_range(range: Option<ToneRange>) -> (u8, u8) {
         Some(ToneRange::Alto) => (note_string_to_key("F3"), note_string_to_key("F5")),
         Some(ToneRange::MezzoSoprano) => (note_string_to_key("A3"), note_string_to_key("A5")),
         Some(ToneRange::Soprano) => (note_string_to_key("C4"), note_string_to_key("C6")),
-        None => (note_string_to_key("G2"), note_string_to_key("G3")),
+        None => (note_string_to_key("A2"), note_string_to_key("A4")),
     }
 }
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Whether to save the output to an MP3 file
+    /// If set, saves the output to a file as mp3 instead of playing it in realtime
     #[arg(short, long)]
-    save: bool,
+    save: Option<String>,
     /// Duration of the note in seconds
     #[arg(short, long, default_value_t = 0.7)]
     duration: f64,
@@ -129,6 +128,7 @@ impl Player for RealtimePlayer {
 
 struct FilePlayer {
     synth: XSynthRender,
+    save_path: String,
 }
 
 impl Player for FilePlayer {
@@ -178,9 +178,9 @@ impl Player for FilePlayer {
     }
 
     fn finalize(self: Box<Self>) {
-        self.synth.finalize();
+        // self.synth.finalize();
         println!("Converting to MP3...");
-        convert_wav_to_mp3(WAV_OUTPUT_PATH, MP3_OUTPUT_PATH).unwrap();
+        convert_wav_to_mp3(WAV_OUTPUT_PATH, &self.save_path).unwrap();
         println!("Done!");
     }
 }
@@ -188,51 +188,74 @@ impl Player for FilePlayer {
 fn main() {
     let args = Args::parse();
 
-    let (mut player, params): (Box<dyn Player>, AudioStreamParams) = if args.save {
+    if let Some(save_path) = args.save {
         let synth = XSynthRender::new(Default::default(), WAV_OUTPUT_PATH.into());
         let params = synth.get_params();
-        (Box::new(FilePlayer { synth }), params)
+        let mut player = FilePlayer { synth, save_path };
+
+        player.load_soundfont(params);
+
+        let (range_from, range_to) = get_tone_range(args.range);
+        let key_from = if let Some(from) = &args.from {
+            note_string_to_key(from)
+        } else {
+            range_from
+        };
+
+        let key_to = if let Some(to) = &args.to {
+            note_string_to_key(to)
+        } else {
+            range_to
+        };
+
+        println!("Playing triads from {} to {}", key_from, key_to);
+
+        play_triads_from(&mut player, key_from, key_to, args.duration);
+
+        player.synth.finalize();
+        println!("Converting to MP3...");
+        convert_wav_to_mp3(WAV_OUTPUT_PATH, &player.save_path).unwrap();
+        println!("Done!");
     } else {
         let synth = RealtimeSynth::open_with_all_defaults();
         let params = synth.stream_params();
         let sender = synth.get_sender_ref().clone();
-        (
-            Box::new(RealtimePlayer {
-                sender,
-                _synth: synth,
-            }),
-            params,
-        )
+        let mut player = Box::new(RealtimePlayer {
+            sender,
+            _synth: synth,
+        });
+
+        player.load_soundfont(params);
+
+        let (range_from, range_to) = get_tone_range(args.range);
+        let key_from = if let Some(from) = &args.from {
+            note_string_to_key(from)
+        } else {
+            range_from
+        };
+
+        let key_to = if let Some(to) = &args.to {
+            note_string_to_key(to)
+        } else {
+            range_to
+        };
+
+        println!("Playing triads from {} to {}", key_from, key_to);
+
+        play_triads_from(player.as_mut(), key_from, key_to, args.duration);
+
+        player.finalize();
     };
-
-    player.load_soundfont(params);
-
-    let (range_from, range_to) = get_tone_range(args.range);
-    let key_from = if let Some(from) = &args.from {
-        note_string_to_key(from)
-    } else {
-        range_from
-    };
-
-    let key_to = if let Some(to) = &args.to {
-        note_string_to_key(to)
-    } else {
-        range_to
-    };
-
-    println!(
-        "Playing triads from {} to {}",
-        key_from, key_to
-    );
-
-    play_triads_from(player.as_mut(), key_from, key_to, args.duration);
-
-    player.finalize();
 }
 
 fn note_string_to_key(note_string: &str) -> u8 {
     let note = note_string.trim_end_matches(char::is_numeric);
-    let octave = note_string.chars().last().unwrap_or('0').to_digit(10).unwrap_or(0) as u8;
+    let octave = note_string
+        .chars()
+        .last()
+        .unwrap_or('0')
+        .to_digit(10)
+        .unwrap_or(0) as u8;
     note_to_key(note, octave)
 }
 
@@ -270,7 +293,7 @@ fn play_triad(player: &mut dyn Player, key: u8, note_duration: f64) {
 }
 
 fn play_triads_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) {
-    for i in key_from..=key_to {
+    for i in key_from..=(key_to - 7) {
         play_triad(player, i, note_duration);
     }
 }
