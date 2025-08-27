@@ -340,9 +340,13 @@ fn play_scale(player: &mut dyn Player, key: u8, note_duration: f64) {
     }
     // Play down: 4th, 3rd, 2nd, Root
     for &note in scale[0..4].iter().rev() {
-        player.play_note(note, note_duration * 0.5);
+        if note == scale[0] {
+            player.play_note(note, note_duration);
+        } else {
+            player.play_note(note, note_duration * 0.5);
+        }
     }
-    player.wait(note_duration * 1.5);
+    player.wait(note_duration);
     // Play the full chord (root, 3rd, 5th)
     let chord = vec![scale[0], scale[2], scale[4]];
     player.play_chord(&chord, note_duration * 2.0);
