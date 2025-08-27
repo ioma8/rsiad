@@ -16,7 +16,7 @@ use xsynth_core::{
     soundfont::{SampleSoundfont, SoundfontBase},
     AudioStreamParams,
 };
-use xsynth_realtime::{RealtimeEventSender, RealtimeSynth, XSynthRealtimeConfig, ThreadCount};
+use xsynth_realtime::{RealtimeEventSender, RealtimeSynth, ThreadCount, XSynthRealtimeConfig};
 
 //const SF_PATH: &str = "Yamaha_C3_Grand_Piano.sf2";
 const SF_PATH: &str = "UprightPianoKW-small-bright-20190703.sf2";
@@ -30,6 +30,12 @@ enum ToneRange {
     Alto,
     MezzoSoprano,
     Soprano,
+}
+
+#[derive(Copy, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+enum ExerciseType {
+    Triads,
+    Scales,
 }
 
 fn get_tone_range(range: Option<ToneRange>) -> (u8, u8) {
@@ -51,7 +57,7 @@ struct Args {
     #[arg(short, long)]
     save: Option<String>,
     /// Duration of the note in seconds
-    #[arg(short, long, default_value_t = 0.7)]
+    #[arg(short, long, default_value_t = 0.8)]
     duration: f64,
     /// Starting key of the range
     #[arg(short, long)]
@@ -62,6 +68,9 @@ struct Args {
     /// Tone range of the singer
     #[arg(short, long, value_enum)]
     range: Option<ToneRange>,
+    /// Type of vocal exercise to generate
+    #[arg(short, long, value_enum, default_value_t = ExerciseType::Triads)]
+    exercise: ExerciseType,
 }
 
 trait Player {
@@ -208,16 +217,24 @@ fn main() {
             range_to
         };
 
-        println!("Playing triads from {} to {}", key_from, key_to);
+        println!(
+            "Playing {} from {} to {}",
+            match args.exercise {
+                ExerciseType::Triads => "triads",
+                ExerciseType::Scales => "scales",
+            },
+            key_from,
+            key_to
+        );
 
-        play_triads_from(&mut player, key_from, key_to, args.duration);
+        play_exercises_from(&mut player, args.exercise, key_from, key_to, args.duration);
 
         player.synth.finalize();
         println!("Converting to MP3...");
         convert_wav_to_mp3(WAV_OUTPUT_PATH, &player.save_path).unwrap();
         println!("Done!");
     } else {
-                        let config = XSynthRealtimeConfig {
+        let config = XSynthRealtimeConfig {
             multithreading: ThreadCount::Auto,
             render_window_ms: 50.0,
             ..Default::default()
@@ -245,9 +262,23 @@ fn main() {
             range_to
         };
 
-        println!("Playing triads from {} to {}", key_from, key_to);
+        println!(
+            "Playing {} from {} to {}",
+            match args.exercise {
+                ExerciseType::Triads => "triads",
+                ExerciseType::Scales => "scales",
+            },
+            key_from,
+            key_to
+        );
 
-        play_triads_from(player.as_mut(), key_from, key_to, args.duration);
+        play_exercises_from(
+            player.as_mut(),
+            args.exercise,
+            key_from,
+            key_to,
+            args.duration,
+        );
 
         player.finalize();
     };
@@ -287,6 +318,10 @@ fn get_major_chord(key: u8) -> Vec<u8> {
     vec![key, key + 4, key + 7] // Root, Major 3rd, Perfect 5th
 }
 
+fn get_major_scale_to_fifth(key: u8) -> Vec<u8> {
+    vec![key, key + 2, key + 4, key + 5, key + 7] // Root, 2nd, 3rd, 4th, 5th
+}
+
 fn play_triad(player: &mut dyn Player, key: u8, note_duration: f64) {
     let chord = get_major_chord(key);
     let triad = vec![chord[0], chord[1], chord[2], chord[1], chord[0]];
@@ -297,9 +332,44 @@ fn play_triad(player: &mut dyn Player, key: u8, note_duration: f64) {
     player.play_chord(&chord, note_duration * 2.0);
 }
 
+fn play_scale(player: &mut dyn Player, key: u8, note_duration: f64) {
+    let scale = get_major_scale_to_fifth(key);
+    // Play up: Root, 2nd, 3rd, 4th, 5th
+    for &note in &scale {
+        player.play_note(note, note_duration * 0.5);
+    }
+    // Play down: 4th, 3rd, 2nd, Root
+    for &note in scale[0..4].iter().rev() {
+        player.play_note(note, note_duration * 0.5);
+    }
+    player.wait(note_duration * 1.5);
+    // Play the full chord (root, 3rd, 5th)
+    let chord = vec![scale[0], scale[2], scale[4]];
+    player.play_chord(&chord, note_duration * 2.0);
+}
+
 fn play_triads_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) {
     for i in key_from..=(key_to - 7) {
         play_triad(player, i, note_duration);
+    }
+}
+
+fn play_scales_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) {
+    for i in key_from..=(key_to - 7) {
+        play_scale(player, i, note_duration);
+    }
+}
+
+fn play_exercises_from(
+    player: &mut dyn Player,
+    exercise_type: ExerciseType,
+    key_from: u8,
+    key_to: u8,
+    note_duration: f64,
+) {
+    match exercise_type {
+        ExerciseType::Triads => play_triads_from(player, key_from, key_to, note_duration),
+        ExerciseType::Scales => play_scales_from(player, key_from, key_to, note_duration),
     }
 }
 
