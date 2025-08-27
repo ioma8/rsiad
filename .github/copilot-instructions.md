@@ -60,6 +60,13 @@ fn get_major_scale_to_fifth(key: u8) -> Vec<u8> { vec![key, key + 2, key + 4, ke
 // Scale sequence: Root → 2nd → 3rd → 4th → 5th → 4th → 3rd → 2nd → Root → Full Chord
 ```
 
+### Octave Generation Pattern
+```rust
+// Octave chord: root + octave (12 semitones)
+fn get_octave_chord(key: u8) -> Vec<u8> { vec![key, key + 12] }
+// Octave sequence: Root → Octave → Both Together (Chord)
+```
+
 ### Vocal Range Mappings
 Predefined MIDI key ranges for each vocal type:
 - Bass: E2-E4, Baritone: A2-A4, Tenor: C3-C5
@@ -92,7 +99,7 @@ Manual PCM buffer management required due to `mp3lame-encoder` API:
 2. `DualPcm` input → encode → flush → concatenate buffers
 
 ## CLI Usage Patterns
-- Default: Realtime baritone range (A2-A4) with 0.7s notes, triads exercise
+- Default: Realtime baritone range (A2-A4) with 0.8s notes, triads exercise
 - File output: `--save filename.mp3` switches to file mode
 - Range override: `--from C3 --to C5` or `--range soprano`
-- Exercise types: `--exercise triads` (default) or `--exercise scales` for major scale patterns
+- Exercise types: `--exercise triads` (default), `--exercise scales` for major scale patterns, or `--exercise octaves` for octave intervals

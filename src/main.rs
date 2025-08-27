@@ -36,6 +36,7 @@ enum ToneRange {
 enum ExerciseType {
     Triads,
     Scales,
+    Octaves,
 }
 
 fn get_tone_range(range: Option<ToneRange>) -> (u8, u8) {
@@ -222,6 +223,7 @@ fn main() {
             match args.exercise {
                 ExerciseType::Triads => "triads",
                 ExerciseType::Scales => "scales",
+                ExerciseType::Octaves => "octaves",
             },
             key_from,
             key_to
@@ -267,6 +269,7 @@ fn main() {
             match args.exercise {
                 ExerciseType::Triads => "triads",
                 ExerciseType::Scales => "scales",
+                ExerciseType::Octaves => "octaves",
             },
             key_from,
             key_to
@@ -322,6 +325,10 @@ fn get_major_scale_to_fifth(key: u8) -> Vec<u8> {
     vec![key, key + 2, key + 4, key + 5, key + 7] // Root, 2nd, 3rd, 4th, 5th
 }
 
+fn get_octave_chord(key: u8) -> Vec<u8> {
+    vec![key, key + 12] // Root and octave
+}
+
 fn play_triad(player: &mut dyn Player, key: u8, note_duration: f64) {
     let chord = get_major_chord(key);
     let triad = vec![chord[0], chord[1], chord[2], chord[1], chord[0]];
@@ -352,6 +359,16 @@ fn play_scale(player: &mut dyn Player, key: u8, note_duration: f64) {
     player.play_chord(&chord, note_duration * 2.0);
 }
 
+fn play_octave(player: &mut dyn Player, key: u8, note_duration: f64) {
+    let octave_notes = get_octave_chord(key);
+    // Play root note
+    player.play_note(octave_notes[0], note_duration);
+    // Play octave note
+    player.play_note(octave_notes[1], note_duration);
+    // Play both together as chord
+    player.play_chord(&octave_notes, note_duration * 2.0);
+}
+
 fn play_triads_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) {
     for i in key_from..=(key_to - 7) {
         play_triad(player, i, note_duration);
@@ -361,6 +378,12 @@ fn play_triads_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_dura
 fn play_scales_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) {
     for i in key_from..=(key_to - 7) {
         play_scale(player, i, note_duration);
+    }
+}
+
+fn play_octaves_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) {
+    for i in key_from..=(key_to - 12) {
+        play_octave(player, i, note_duration);
     }
 }
 
@@ -374,6 +397,7 @@ fn play_exercises_from(
     match exercise_type {
         ExerciseType::Triads => play_triads_from(player, key_from, key_to, note_duration),
         ExerciseType::Scales => play_scales_from(player, key_from, key_to, note_duration),
+        ExerciseType::Octaves => play_octaves_from(player, key_from, key_to, note_duration),
     }
 }
 
