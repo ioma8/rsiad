@@ -1,7 +1,8 @@
 use crate::player::Player;
 use clap::ValueEnum;
+use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+#[derive(Copy, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize)]
 pub enum ToneRange {
     Bass,
     Baritone,
@@ -11,7 +12,7 @@ pub enum ToneRange {
     Soprano,
 }
 
-#[derive(Copy, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+#[derive(Copy, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize)]
 pub enum ExerciseType {
     Triads,
     Scales,
