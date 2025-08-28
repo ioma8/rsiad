@@ -3,6 +3,14 @@ name = "rsiad"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "rsiad"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rsiad"
+path = "src/main.rs"
+
 [dependencies]
 spin_sleep = "1.3.2"
 xsynth-core = "0.3.3"

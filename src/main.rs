@@ -1,54 +1,8 @@
-mod config;
-mod render;
-mod writer;
-
-use clap::{Parser, ValueEnum};
-use std::fs::File;
-use std::io::Read;
-use std::sync::Arc;
-use std::time::Duration;
-
-use crate::render::XSynthRender;
-use mp3lame_encoder::{Builder, DualPcm, FlushNoGap, Quality};
-use xsynth_core::{
-    channel::{ChannelAudioEvent, ChannelConfigEvent, ChannelEvent},
-    channel_group::SynthEvent,
-    soundfont::{SampleSoundfont, SoundfontBase},
-    AudioStreamParams,
+use clap::Parser;
+use rsiad::{
+    VocalExerciseEngine, ExerciseConfig, OutputMode, 
+    ExerciseType, ToneRange, get_tone_range, note_string_to_key
 };
-use xsynth_realtime::{RealtimeEventSender, RealtimeSynth, ThreadCount, XSynthRealtimeConfig};
-
-const SF_PATH: &str = "UprightPianoKW-small-bright-20190703.sf2";
-const WAV_OUTPUT_PATH: &str = "output.wav";
-
-#[derive(Copy, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-enum ToneRange {
-    Bass,
-    Baritone,
-    Tenor,
-    Alto,
-    MezzoSoprano,
-    Soprano,
-}
-
-#[derive(Copy, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-enum ExerciseType {
-    Triads,
-    Scales,
-    Octaves,
-}
-
-fn get_tone_range(range: Option<ToneRange>) -> (u8, u8) {
-    match range {
-        Some(ToneRange::Bass) => (note_string_to_key("E2"), note_string_to_key("E4")),
-        Some(ToneRange::Baritone) => (note_string_to_key("A2"), note_string_to_key("A4")),
-        Some(ToneRange::Tenor) => (note_string_to_key("C3"), note_string_to_key("C5")),
-        Some(ToneRange::Alto) => (note_string_to_key("F3"), note_string_to_key("F5")),
-        Some(ToneRange::MezzoSoprano) => (note_string_to_key("A3"), note_string_to_key("A5")),
-        Some(ToneRange::Soprano) => (note_string_to_key("C4"), note_string_to_key("C6")),
-        None => (note_string_to_key("A2"), note_string_to_key("A4")),
-    }
-}
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -73,382 +27,50 @@ struct Args {
     exercise: ExerciseType,
 }
 
-trait Player {
-    fn play_note(&mut self, key: u8, duration: f64);
-    fn play_chord(&mut self, keys: &[u8], duration: f64);
-    fn load_soundfont(&mut self, params: AudioStreamParams);
-    fn wait(&mut self, duration: f64);
-    fn finalize(self: Box<Self>);
-}
-
-struct RealtimePlayer {
-    sender: RealtimeEventSender,
-    _synth: RealtimeSynth,
-}
-
-impl Player for RealtimePlayer {
-    fn play_note(&mut self, key: u8, duration: f64) {
-        self.sender.send_event(SynthEvent::Channel(
-            0,
-            ChannelEvent::Audio(ChannelAudioEvent::NoteOn { key, vel: 127 }),
-        ));
-        self.wait(duration);
-        self.sender.send_event(SynthEvent::Channel(
-            0,
-            ChannelEvent::Audio(ChannelAudioEvent::NoteOff { key }),
-        ));
-    }
-
-    fn play_chord(&mut self, keys: &[u8], duration: f64) {
-        for &key in keys {
-            self.sender.send_event(SynthEvent::Channel(
-                0,
-                ChannelEvent::Audio(ChannelAudioEvent::NoteOn { key, vel: 127 }),
-            ));
-        }
-        self.wait(duration);
-        for &key in keys {
-            self.sender.send_event(SynthEvent::Channel(
-                0,
-                ChannelEvent::Audio(ChannelAudioEvent::NoteOff { key }),
-            ));
-        }
-    }
-
-    fn load_soundfont(&mut self, params: AudioStreamParams) {
-        println!("Loading Soundfont");
-        let soundfonts: Vec<Arc<dyn SoundfontBase>> = vec![Arc::new(
-            SampleSoundfont::new(SF_PATH, params, Default::default()).unwrap(),
-        )];
-        println!("Loaded");
-
-        self.sender
-            .send_event(SynthEvent::AllChannels(ChannelEvent::Config(
-                ChannelConfigEvent::SetSoundfonts(soundfonts),
-            )));
-    }
-
-    fn wait(&mut self, duration: f64) {
-        spin_sleep::sleep(Duration::from_secs_f64(duration));
-    }
-
-    fn finalize(self: Box<Self>) {}
-}
-
-struct FilePlayer {
-    synth: XSynthRender,
-    save_path: String,
-}
-
-impl Player for FilePlayer {
-    fn play_note(&mut self, key: u8, duration: f64) {
-        self.synth.send_event(SynthEvent::Channel(
-            0,
-            ChannelEvent::Audio(ChannelAudioEvent::NoteOn { key, vel: 127 }),
-        ));
-        self.wait(duration);
-        self.synth.send_event(SynthEvent::Channel(
-            0,
-            ChannelEvent::Audio(ChannelAudioEvent::NoteOff { key }),
-        ));
-    }
-
-    fn play_chord(&mut self, keys: &[u8], duration: f64) {
-        for &key in keys {
-            self.synth.send_event(SynthEvent::Channel(
-                0,
-                ChannelEvent::Audio(ChannelAudioEvent::NoteOn { key, vel: 127 }),
-            ));
-        }
-        self.wait(duration);
-        for &key in keys {
-            self.synth.send_event(SynthEvent::Channel(
-                0,
-                ChannelEvent::Audio(ChannelAudioEvent::NoteOff { key }),
-            ));
-        }
-    }
-
-    fn load_soundfont(&mut self, params: AudioStreamParams) {
-        println!("Loading Soundfont");
-        let soundfonts: Vec<Arc<dyn SoundfontBase>> = vec![Arc::new(
-            SampleSoundfont::new(SF_PATH, params, Default::default()).unwrap(),
-        )];
-        println!("Loaded");
-
-        self.synth
-            .send_event(SynthEvent::AllChannels(ChannelEvent::Config(
-                ChannelConfigEvent::SetSoundfonts(soundfonts),
-            )));
-    }
-
-    fn wait(&mut self, duration: f64) {
-        self.synth.render_batch(duration);
-    }
-
-    fn finalize(self: Box<Self>) {
-        // self.synth.finalize();
-        println!("Converting to MP3...");
-        convert_wav_to_mp3(WAV_OUTPUT_PATH, &self.save_path).unwrap();
-        println!("Done!");
-    }
-}
-
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-
-    if let Some(save_path) = args.save {
-        let synth = XSynthRender::new(Default::default(), WAV_OUTPUT_PATH.into());
-        let params = synth.get_params();
-        let mut player = FilePlayer { synth, save_path };
-
-        player.load_soundfont(params);
-
-        let (range_from, range_to) = get_tone_range(args.range);
-        let key_from = if let Some(from) = &args.from {
-            note_string_to_key(from)
-        } else {
-            range_from
-        };
-
-        let key_to = if let Some(to) = &args.to {
-            note_string_to_key(to)
-        } else {
-            range_to
-        };
-
-        println!(
-            "Playing {} from {} to {}",
-            match args.exercise {
-                ExerciseType::Triads => "triads",
-                ExerciseType::Scales => "scales",
-                ExerciseType::Octaves => "octaves",
-            },
-            key_from,
-            key_to
-        );
-
-        play_exercises_from(&mut player, args.exercise, key_from, key_to, args.duration);
-
-        player.synth.finalize();
-        println!("Converting to MP3...");
-        convert_wav_to_mp3(WAV_OUTPUT_PATH, &player.save_path).unwrap();
-        println!("Done!");
+    
+    let engine = VocalExerciseEngine::new("UprightPianoKW-small-bright-20190703.sf2");
+    
+    // Determine key range
+    let (range_from, range_to) = get_tone_range(args.range);
+    let key_from = if let Some(from) = &args.from {
+        note_string_to_key(from)
     } else {
-        let config = XSynthRealtimeConfig {
-            multithreading: ThreadCount::Auto,
-            render_window_ms: 50.0,
-            ..Default::default()
-        };
-        let synth = RealtimeSynth::open_with_default_output(config);
-        let params = synth.stream_params();
-        let sender = synth.get_sender_ref().clone();
-        let mut player = Box::new(RealtimePlayer {
-            sender,
-            _synth: synth,
-        });
-
-        player.load_soundfont(params);
-
-        let (range_from, range_to) = get_tone_range(args.range);
-        let key_from = if let Some(from) = &args.from {
-            note_string_to_key(from)
-        } else {
-            range_from
-        };
-
-        let key_to = if let Some(to) = &args.to {
-            note_string_to_key(to)
-        } else {
-            range_to
-        };
-
-        println!(
-            "Playing {} from {} to {}",
-            match args.exercise {
-                ExerciseType::Triads => "triads",
-                ExerciseType::Scales => "scales",
-                ExerciseType::Octaves => "octaves",
-            },
-            key_from,
-            key_to
-        );
-
-        play_exercises_from(
-            player.as_mut(),
-            args.exercise,
-            key_from,
-            key_to,
-            args.duration,
-        );
-
-        player.finalize();
+        range_from
     };
-}
-
-fn note_string_to_key(note_string: &str) -> u8 {
-    let note = note_string.trim_end_matches(char::is_numeric);
-    let octave = note_string
-        .chars()
-        .last()
-        .unwrap_or('0')
-        .to_digit(10)
-        .unwrap_or(0) as u8;
-    note_to_key(note, octave)
-}
-
-fn note_to_key(note: &str, octave: u8) -> u8 {
-    let base_key = match note {
-        "C" => 24,
-        "C#" | "Db" => 25,
-        "D" => 26,
-        "D#" | "Eb" => 27,
-        "E" => 28,
-        "F" => 29,
-        "F#" | "Gb" => 30,
-        "G" => 31,
-        "G#" | "Ab" => 32,
-        "A" => 33,
-        "A#" | "Bb" => 34,
-        "B" => 35,
-        _ => panic!("Invalid note: {}", note),
+    let key_to = if let Some(to) = &args.to {
+        note_string_to_key(to)
+    } else {
+        range_to
     };
-    base_key + octave * 12
-}
-
-fn get_major_chord(key: u8) -> Vec<u8> {
-    vec![key, key + 4, key + 7] // Root, Major 3rd, Perfect 5th
-}
-
-fn get_major_scale_to_fifth(key: u8) -> Vec<u8> {
-    vec![key, key + 2, key + 4, key + 5, key + 7] // Root, 2nd, 3rd, 4th, 5th
-}
-
-fn get_octave_chord(key: u8) -> Vec<u8> {
-    vec![key, key + 12] // Root and octave
-}
-
-fn play_triad(player: &mut dyn Player, key: u8, note_duration: f64) {
-    let chord = get_major_chord(key);
-    let triad = vec![chord[0], chord[1], chord[2], chord[1], chord[0]];
-    for &key in &triad {
-        player.play_note(key, note_duration);
-    }
-    player.wait(note_duration);
-    player.play_chord(&chord, note_duration * 2.0);
-}
-
-fn play_scale(player: &mut dyn Player, key: u8, note_duration: f64) {
-    let scale = get_major_scale_to_fifth(key);
-    // Play up: Root, 2nd, 3rd, 4th, 5th
-    for &note in &scale {
-        player.play_note(note, note_duration * 0.5);
-    }
-    // Play down: 4th, 3rd, 2nd, Root
-    for &note in scale[0..4].iter().rev() {
-        if note == scale[0] {
-            player.play_note(note, note_duration);
-        } else {
-            player.play_note(note, note_duration * 0.5);
-        }
-    }
-    player.wait(note_duration);
-    // Play the full chord (root, 3rd, 5th)
-    let chord = vec![scale[0], scale[2], scale[4]];
-    player.play_chord(&chord, note_duration * 2.0);
-}
-
-fn play_octave(player: &mut dyn Player, key: u8, note_duration: f64) {
-    let octave_notes = get_octave_chord(key);
-    // Play root note
-    player.play_note(octave_notes[0], note_duration);
-    // Play octave note
-    player.play_note(octave_notes[1], note_duration);
-    // Play both together as chord
-    player.play_chord(&octave_notes, note_duration * 2.0);
-}
-
-fn play_triads_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) {
-    for i in key_from..=(key_to - 7) {
-        play_triad(player, i, note_duration);
-    }
-}
-
-fn play_scales_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) {
-    for i in key_from..=(key_to - 7) {
-        play_scale(player, i, note_duration);
-    }
-}
-
-fn play_octaves_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) {
-    for i in key_from..=(key_to - 12) {
-        play_octave(player, i, note_duration);
-    }
-}
-
-fn play_exercises_from(
-    player: &mut dyn Player,
-    exercise_type: ExerciseType,
-    key_from: u8,
-    key_to: u8,
-    note_duration: f64,
-) {
-    match exercise_type {
-        ExerciseType::Triads => play_triads_from(player, key_from, key_to, note_duration),
-        ExerciseType::Scales => play_scales_from(player, key_from, key_to, note_duration),
-        ExerciseType::Octaves => play_octaves_from(player, key_from, key_to, note_duration),
-    }
-}
-
-fn convert_wav_to_mp3(wav_path: &str, mp3_path: &str) -> Result<(), std::io::Error> {
-    let mut wav_file = File::open(wav_path)?;
-    let mut wav_data = Vec::new();
-    wav_file.read_to_end(&mut wav_data)?;
-
-    let mut mp3_file = File::create(mp3_path)?;
-
-    let wav = hound::WavReader::new(&wav_data[..]).unwrap();
-    let mut samples = wav.into_samples::<f32>();
-    let mut pcm_left = Vec::new();
-    let mut pcm_right = Vec::new();
-
-    while let (Some(left), Some(right)) = (samples.next(), samples.next()) {
-        pcm_left.push((left.unwrap() * std::i16::MAX as f32) as i16);
-        pcm_right.push((right.unwrap() * std::i16::MAX as f32) as i16);
-    }
-
-    let mut encoder = Builder::new().expect("Create LAME builder");
-    encoder.set_num_channels(2).unwrap();
-    encoder.set_sample_rate(44100).unwrap();
-    encoder.set_quality(Quality::Best).unwrap();
-    let mut encoder = encoder.build().expect("To create LAME encoder");
-
-    let input = DualPcm {
-        left: &pcm_left,
-        right: &pcm_right,
+    
+    let config = ExerciseConfig {
+        exercise_type: args.exercise,
+        key_range: (key_from, key_to),
+        note_duration: args.duration,
+        vocal_range: args.range,
     };
-
-    let mut mp3_buffer = Vec::new();
-    mp3_buffer.resize(mp3lame_encoder::max_required_buffer_size(pcm_left.len()), 0);
-    let mut mp3_buffer_uninit = unsafe {
-        std::mem::transmute::<&mut [u8], &mut [std::mem::MaybeUninit<u8>]>(&mut mp3_buffer)
+    
+    let output = if let Some(save_path) = args.save {
+        OutputMode::File { path: save_path }
+    } else {
+        OutputMode::Realtime
     };
-
-    let encoded_size = encoder.encode(input, &mut mp3_buffer_uninit).unwrap();
-    mp3_buffer.truncate(encoded_size);
-
-    let mut final_mp3_buffer = Vec::new();
-    final_mp3_buffer.resize(7200, 0);
-    let mut final_mp3_buffer_uninit = unsafe {
-        std::mem::transmute::<&mut [u8], &mut [std::mem::MaybeUninit<u8>]>(&mut final_mp3_buffer)
-    };
-    let encoded_size = encoder
-        .flush::<FlushNoGap>(&mut final_mp3_buffer_uninit)
-        .unwrap();
-    final_mp3_buffer.truncate(encoded_size);
-    mp3_buffer.extend_from_slice(&final_mp3_buffer);
-
-    std::io::Write::write_all(&mut mp3_file, &mp3_buffer)?;
-
+    
+    println!(
+        "Playing {} from {} to {}",
+        match args.exercise {
+            ExerciseType::Triads => "triads",
+            ExerciseType::Scales => "scales",
+            ExerciseType::Octaves => "octaves",
+        },
+        key_from,
+        key_to
+    );
+    
+    let result = engine.generate_exercise(config, output)?;
+    
+    println!("Exercise completed: {:?}", result);
     Ok(())
 }
