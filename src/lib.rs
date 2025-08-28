@@ -13,7 +13,7 @@ use xsynth_core::AudioStreamParams;
 
 // Re-export key types for the public API
 pub use exercises::{ExerciseType, ToneRange};
-pub use player::{Player, PlayerType, PlayerFactory};
+pub use player::{Player, PlayerType, PlayerFactory, stop_playback, reset_stop_flag};
 pub use audio::{note_to_key, note_string_to_key, get_tone_range, convert_wav_to_mp3};
 
 /// Main library interface for vocal warmup exercises
@@ -75,8 +75,11 @@ impl VocalExerciseEngine {
             ExerciseType::Octaves => (key_to - key_from).saturating_sub(12),
         };
         
+        // Reset stop flag before starting
+        player::reset_stop_flag();
+        
         // Play the exercise
-        exercises::play_exercises_from(
+        let completed = exercises::play_exercises_from(
             player.as_mut(),
             config.exercise_type,
             key_from,
@@ -86,6 +89,10 @@ impl VocalExerciseEngine {
         
         // Finalize
         player.finalize();
+        
+        if !completed {
+            return Err("Exercise was stopped by user".into());
+        }
         
         Ok(ExerciseResult {
             duration_seconds: (range_size as f64 + 1.0) * config.note_duration * 6.0, // Rough estimate

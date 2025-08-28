@@ -37,63 +37,88 @@ impl ExercisePatterns {
 }
 
 /// Individual exercise implementations
-pub fn play_triad(player: &mut dyn Player, key: u8, note_duration: f64) {
+pub fn play_triad(player: &mut dyn Player, key: u8, note_duration: f64) -> bool {
     let chord = ExercisePatterns::major_chord(key);
     let triad = vec![chord[0], chord[1], chord[2], chord[1], chord[0]];
     for &key in &triad {
-        player.play_note(key, note_duration);
+        if !player.play_note(key, note_duration) {
+            return false; // Stopped
+        }
     }
-    player.wait(note_duration);
-    player.play_chord(&chord, note_duration * 2.0);
+    if !player.wait(note_duration) {
+        return false; // Stopped
+    }
+    player.play_chord(&chord, note_duration * 2.0)
 }
 
-pub fn play_scale(player: &mut dyn Player, key: u8, note_duration: f64) {
+pub fn play_scale(player: &mut dyn Player, key: u8, note_duration: f64) -> bool {
     let scale = ExercisePatterns::major_scale_to_fifth(key);
     // Play up: Root, 2nd, 3rd, 4th, 5th
     for &note in &scale {
-        player.play_note(note, note_duration * 0.5);
+        if !player.play_note(note, note_duration * 0.5) {
+            return false; // Stopped
+        }
     }
     // Play down: 4th, 3rd, 2nd, Root
     for &note in scale[0..4].iter().rev() {
         if note == scale[0] {
-            player.play_note(note, note_duration);
+            if !player.play_note(note, note_duration) {
+                return false; // Stopped
+            }
         } else {
-            player.play_note(note, note_duration * 0.5);
+            if !player.play_note(note, note_duration * 0.5) {
+                return false; // Stopped
+            }
         }
     }
-    player.wait(note_duration);
+    if !player.wait(note_duration) {
+        return false; // Stopped
+    }
     // Play the full chord (root, 3rd, 5th)
     let chord = vec![scale[0], scale[2], scale[4]];
-    player.play_chord(&chord, note_duration * 2.0);
+    player.play_chord(&chord, note_duration * 2.0)
 }
 
-pub fn play_octave(player: &mut dyn Player, key: u8, note_duration: f64) {
+pub fn play_octave(player: &mut dyn Player, key: u8, note_duration: f64) -> bool {
     let octave_notes = ExercisePatterns::octave_chord(key);
     // Play root note
-    player.play_note(octave_notes[0], note_duration);
+    if !player.play_note(octave_notes[0], note_duration) {
+        return false; // Stopped
+    }
     // Play octave note
-    player.play_note(octave_notes[1], note_duration);
+    if !player.play_note(octave_notes[1], note_duration) {
+        return false; // Stopped
+    }
     // Play both together as chord
-    player.play_chord(&octave_notes, note_duration * 2.0);
+    player.play_chord(&octave_notes, note_duration * 2.0)
 }
 
 /// Exercise range implementations
-pub fn play_triads_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) {
+pub fn play_triads_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) -> bool {
     for i in key_from..=(key_to - 7) {
-        play_triad(player, i, note_duration);
+        if !play_triad(player, i, note_duration) {
+            return false; // Stopped
+        }
     }
+    true
 }
 
-pub fn play_scales_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) {
+pub fn play_scales_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) -> bool {
     for i in key_from..=(key_to - 7) {
-        play_scale(player, i, note_duration);
+        if !play_scale(player, i, note_duration) {
+            return false; // Stopped
+        }
     }
+    true
 }
 
-pub fn play_octaves_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) {
+pub fn play_octaves_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) -> bool {
     for i in key_from..=(key_to - 12) {
-        play_octave(player, i, note_duration);
+        if !play_octave(player, i, note_duration) {
+            return false; // Stopped
+        }
     }
+    true
 }
 
 /// Main exercise dispatcher
@@ -103,7 +128,7 @@ pub fn play_exercises_from(
     key_from: u8,
     key_to: u8,
     note_duration: f64,
-) {
+) -> bool {
     match exercise_type {
         ExerciseType::Triads => play_triads_from(player, key_from, key_to, note_duration),
         ExerciseType::Scales => play_scales_from(player, key_from, key_to, note_duration),
