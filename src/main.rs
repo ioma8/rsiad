@@ -18,7 +18,6 @@ use xsynth_core::{
 };
 use xsynth_realtime::{RealtimeEventSender, RealtimeSynth, ThreadCount, XSynthRealtimeConfig};
 
-//const SF_PATH: &str = "Yamaha_C3_Grand_Piano.sf2";
 const SF_PATH: &str = "UprightPianoKW-small-bright-20190703.sf2";
 const WAV_OUTPUT_PATH: &str = "output.wav";
 

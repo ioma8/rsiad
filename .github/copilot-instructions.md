@@ -1,18 +1,18 @@
-# RSIAD - Rust Vocal Warmup Triads
+# RSIAD - Rust Vocal Warmup Exercises
 
 ## Architecture Overview
 
-RSIAD is a command-line audio synthesis tool that generates musical triads for vocal warmup exercises. The codebase uses a **dual-mode architecture**:
+RSIAD is a command-line audio synthesis tool that generates musical exercises for vocal warmup. The codebase uses a **dual-mode architecture**:
 
 - **Realtime Mode**: Uses `xsynth-realtime` with `RealtimePlayer` for immediate audio playback via system audio
 - **File Mode**: Uses custom `XSynthRender` with `FilePlayer` for WAV generation + MP3 conversion
 
-Both modes implement the `Player` trait (`play_note`, `play_chord`, `load_soundfont`, `wait`, `finalize`) enabling polymorphic audio handling.
+Both modes implement the `Player` trait (`play_note`, `play_chord`, `load_soundfont`, `wait`, `finalize`) enabling polymorphic audio handling across three exercise types: triads, scales, and octaves.
 
 ## Key Components
 
 ### Core Modules
-- `main.rs`: CLI parsing, player selection, triad generation logic
+- `main.rs`: CLI parsing, player selection, exercise generation with polymorphic `play_exercises_from()` dispatcher
 - `render.rs`: Custom file-based synthesizer wrapper around `xsynth-core::ChannelGroup`
 - `writer.rs`: Threaded WAV file writer using `crossbeam-channel`
 - `config.rs`: XSynth configuration with audio parameters and envelope settings
@@ -46,25 +46,33 @@ cargo build  # For release builds
 fn note_to_key(note: &str, octave: u8) -> u8
 ```
 
-### Triad Generation Pattern
+### Exercise Generation Patterns
+Each exercise type has distinct musical patterns and range safety:
+
 ```rust
-// Major chord: root + major 3rd (4 semitones) + perfect 5th (7 semitones)
+// Triads: Root → 3rd → 5th → 3rd → Root → Full Chord
 fn get_major_chord(key: u8) -> Vec<u8> { vec![key, key + 4, key + 7] }
-// Triad sequence: Root → 3rd → 5th → 3rd → Root → Full Chord
-```
+// Range: key_from..=(key_to - 7) // Ensures 5th fits
 
-### Scale Generation Pattern
-```rust
-// Major scale to fifth: root, 2nd, 3rd, 4th, 5th (whole-whole-half-whole pattern)
+// Scales: Root → 2nd → 3rd → 4th → 5th → 4th → 3rd → 2nd → Root → Full Chord  
 fn get_major_scale_to_fifth(key: u8) -> Vec<u8> { vec![key, key + 2, key + 4, key + 5, key + 7] }
-// Scale sequence: Root → 2nd → 3rd → 4th → 5th → 4th → 3rd → 2nd → Root → Full Chord
+// Range: key_from..=(key_to - 7) // Ensures 5th fits
+
+// Octaves: Root → Octave → Both Together (Chord)
+fn get_octave_chord(key: u8) -> Vec<u8> { vec![key, key + 12] }
+// Range: key_from..=(key_to - 12) // Ensures octave fits
 ```
 
-### Octave Generation Pattern
+### Polymorphic Exercise System
 ```rust
-// Octave chord: root + octave (12 semitones)
-fn get_octave_chord(key: u8) -> Vec<u8> { vec![key, key + 12] }
-// Octave sequence: Root → Octave → Both Together (Chord)
+// Central dispatcher pattern - add new exercises here
+fn play_exercises_from(player: &mut dyn Player, exercise_type: ExerciseType, ...) {
+    match exercise_type {
+        ExerciseType::Triads => play_triads_from(...),
+        ExerciseType::Scales => play_scales_from(...), 
+        ExerciseType::Octaves => play_octaves_from(...),
+    }
+}
 ```
 
 ### Vocal Range Mappings
@@ -97,6 +105,13 @@ SynthEvent::Channel(0, ChannelEvent::Audio(ChannelAudioEvent::NoteOn { key, vel:
 Manual PCM buffer management required due to `mp3lame-encoder` API:
 1. WAV samples → separate left/right i16 vectors
 2. `DualPcm` input → encode → flush → concatenate buffers
+
+### Release Automation
+Release workflow generates pre-built MP3s for all vocal ranges:
+```bash
+# Pattern used in .github/workflows/release.yml
+./target/release/rsiad --save <range>.mp3 --range <range>
+```
 
 ## CLI Usage Patterns
 - Default: Realtime baritone range (A2-A4) with 0.8s notes, triads exercise
