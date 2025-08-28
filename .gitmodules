@@ -1,0 +1,3 @@
+[submodule "rsiad-tauri"]
+	path = rsiad-tauri
+	url = ./rsiad-tauri
