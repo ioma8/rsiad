@@ -995,6 +995,7 @@ dependencies = [
  "crossbeam-channel",
  "hound",
  "mp3lame-encoder",
+ "serde",
  "spin_sleep",
  "xsynth-core",
  "xsynth-realtime",
