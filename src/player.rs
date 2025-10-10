@@ -1,19 +1,16 @@
-use crate::render::XSynthRender;
 use crate::audio::convert_wav_to_mp3;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use once_cell::sync::Lazy;
-use xsynth_core::{
-    channel::{ChannelAudioEvent, ChannelConfigEvent, ChannelEvent},
-    channel_group::SynthEvent,
-    soundfont::{SampleSoundfont, SoundfontBase},
-    AudioStreamParams,
-};
-use xsynth_realtime::{RealtimeEventSender, RealtimeSynth, ThreadCount, XSynthRealtimeConfig};
+use fluidlite::{Settings, Synth};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use std::sync::Mutex;
+use std::fs::File;
 
 const SF_PATH: &str = "UprightPianoKW-small-bright-20190703.sf2";
 const WAV_OUTPUT_PATH: &str = "output.wav";
+const SAMPLE_RATE: u32 = 44100;
 
 // Global stop flag for playback control
 static STOP_PLAYBACK: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
@@ -33,14 +30,14 @@ fn should_stop() -> bool {
 pub trait Player {
     fn play_note(&mut self, key: u8, duration: f64) -> bool; // Returns false if stopped
     fn play_chord(&mut self, keys: &[u8], duration: f64) -> bool; // Returns false if stopped
-    fn load_soundfont(&mut self, params: AudioStreamParams);
+    fn load_soundfont(&mut self);
     fn wait(&mut self, duration: f64) -> bool; // Returns false if stopped
     fn finalize(self: Box<Self>);
 }
 
 pub struct RealtimePlayer {
-    sender: RealtimeEventSender,
-    _synth: RealtimeSynth,
+    synth: Arc<Mutex<Synth>>,
+    _stream: cpal::Stream,
 }
 
 impl Player for RealtimePlayer {
@@ -49,24 +46,19 @@ impl Player for RealtimePlayer {
             return false;
         }
         
-        self.sender.send_event(SynthEvent::Channel(
-            0,
-            ChannelEvent::Audio(ChannelAudioEvent::NoteOn { key, vel: 127 }),
-        ));
+        let synth = self.synth.lock().unwrap();
+        synth.note_on(0, key as u32, 127).unwrap();
+        drop(synth);
         
         if !self.wait(duration) {
             // Send note off even if stopped to avoid hanging notes
-            self.sender.send_event(SynthEvent::Channel(
-                0,
-                ChannelEvent::Audio(ChannelAudioEvent::NoteOff { key }),
-            ));
+            let synth = self.synth.lock().unwrap();
+            synth.note_off(0, key as u32).unwrap();
             return false;
         }
         
-        self.sender.send_event(SynthEvent::Channel(
-            0,
-            ChannelEvent::Audio(ChannelAudioEvent::NoteOff { key }),
-        ));
+        let synth = self.synth.lock().unwrap();
+        synth.note_off(0, key as u32).unwrap();
         true
     }
 
@@ -75,37 +67,28 @@ impl Player for RealtimePlayer {
             return false;
         }
         
+        let synth = self.synth.lock().unwrap();
         for &key in keys {
-            self.sender.send_event(SynthEvent::Channel(
-                0,
-                ChannelEvent::Audio(ChannelAudioEvent::NoteOn { key, vel: 127 }),
-            ));
+            synth.note_on(0, key as u32, 127).unwrap();
         }
+        drop(synth);
         
         let result = self.wait(duration);
         
         // Always send note off events to avoid hanging notes
+        let synth = self.synth.lock().unwrap();
         for &key in keys {
-            self.sender.send_event(SynthEvent::Channel(
-                0,
-                ChannelEvent::Audio(ChannelAudioEvent::NoteOff { key }),
-            ));
+            synth.note_off(0, key as u32).unwrap();
         }
         
         result
     }
 
-    fn load_soundfont(&mut self, params: AudioStreamParams) {
+    fn load_soundfont(&mut self) {
         println!("Loading Soundfont");
-        let soundfonts: Vec<Arc<dyn SoundfontBase>> = vec![Arc::new(
-            SampleSoundfont::new(SF_PATH, params, Default::default()).unwrap(),
-        )];
+        let synth = self.synth.lock().unwrap();
+        synth.sfload(SF_PATH, true).unwrap();
         println!("Loaded");
-
-        self.sender
-            .send_event(SynthEvent::AllChannels(ChannelEvent::Config(
-                ChannelConfigEvent::SetSoundfonts(soundfonts),
-            )));
     }
 
     fn wait(&mut self, duration: f64) -> bool {
@@ -137,64 +120,55 @@ impl Player for RealtimePlayer {
 }
 
 pub struct FilePlayer {
-    synth: XSynthRender,
+    synth: Synth,
     save_path: String,
+    wav_writer: hound::WavWriter<std::io::BufWriter<File>>,
 }
 
 impl Player for FilePlayer {
     fn play_note(&mut self, key: u8, duration: f64) -> bool {
         // File generation doesn't support stopping mid-process, always returns true
-        self.synth.send_event(SynthEvent::Channel(
-            0,
-            ChannelEvent::Audio(ChannelAudioEvent::NoteOn { key, vel: 127 }),
-        ));
+        self.synth.note_on(0, key as u32, 127).unwrap();
         self.wait(duration);
-        self.synth.send_event(SynthEvent::Channel(
-            0,
-            ChannelEvent::Audio(ChannelAudioEvent::NoteOff { key }),
-        ));
+        self.synth.note_off(0, key as u32).unwrap();
         true
     }
 
     fn play_chord(&mut self, keys: &[u8], duration: f64) -> bool {
         // File generation doesn't support stopping mid-process, always returns true
         for &key in keys {
-            self.synth.send_event(SynthEvent::Channel(
-                0,
-                ChannelEvent::Audio(ChannelAudioEvent::NoteOn { key, vel: 127 }),
-            ));
+            self.synth.note_on(0, key as u32, 127).unwrap();
         }
         self.wait(duration);
         for &key in keys {
-            self.synth.send_event(SynthEvent::Channel(
-                0,
-                ChannelEvent::Audio(ChannelAudioEvent::NoteOff { key }),
-            ));
+            self.synth.note_off(0, key as u32).unwrap();
         }
         true
     }
 
-    fn load_soundfont(&mut self, params: AudioStreamParams) {
+    fn load_soundfont(&mut self) {
         println!("Loading Soundfont");
-        let soundfonts: Vec<Arc<dyn SoundfontBase>> = vec![Arc::new(
-            SampleSoundfont::new(SF_PATH, params, Default::default()).unwrap(),
-        )];
+        self.synth.sfload(SF_PATH, true).unwrap();
         println!("Loaded");
-
-        self.synth
-            .send_event(SynthEvent::AllChannels(ChannelEvent::Config(
-                ChannelConfigEvent::SetSoundfonts(soundfonts),
-            )));
     }
 
     fn wait(&mut self, duration: f64) -> bool {
-        // File generation processes audio in chunks, not real-time
-        self.synth.render_batch(duration);
+        // Calculate number of samples needed for this duration
+        let num_samples = (SAMPLE_RATE as f64 * duration) as usize;
+        let mut buffer = vec![0i16; num_samples * 2]; // Stereo
+        
+        self.synth.write::<&mut [i16]>(buffer.as_mut()).unwrap();
+        
+        // Write to WAV file
+        for sample in buffer.iter() {
+            self.wav_writer.write_sample(*sample).unwrap();
+        }
+        
         true
     }
 
     fn finalize(self: Box<Self>) {
-        self.synth.finalize();
+        self.wav_writer.finalize().unwrap();
         println!("Converting to MP3...");
         convert_wav_to_mp3(WAV_OUTPUT_PATH, &self.save_path).unwrap();
         println!("Done!");
@@ -227,25 +201,89 @@ pub struct PlayerFactory;
 
 impl PlayerFactory {
     pub fn create_realtime_player() -> Result<PlayerType, Box<dyn std::error::Error>> {
-        let config = XSynthRealtimeConfig {
-            multithreading: ThreadCount::Auto,
-            render_window_ms: 50.0,
-            ..Default::default()
+        let settings = Settings::new()?;
+        let synth = Synth::new(settings)?;
+        
+        let synth = Arc::new(Mutex::new(synth));
+        let synth_clone = Arc::clone(&synth);
+        
+        // Set up audio output stream
+        let host = cpal::default_host();
+        let device = host.default_output_device()
+            .ok_or("No output device available")?;
+        
+        // Get the default output config from the device
+        let supported_config = device.default_output_config()?;
+        let sample_rate = supported_config.sample_rate().0;
+        let channels = supported_config.channels();
+        
+        // Set fluidlite to use the device's sample rate
+        {
+            let synth = synth.lock().unwrap();
+            synth.set_sample_rate(sample_rate as f32);
+        }
+        
+        let config = cpal::StreamConfig {
+            channels,
+            sample_rate: cpal::SampleRate(sample_rate),
+            buffer_size: cpal::BufferSize::Default,
         };
-        let synth = RealtimeSynth::open_with_default_output(config);
-        let sender = synth.get_sender_ref().clone();
+        
+        // Build stream based on the sample format
+        let stream = match supported_config.sample_format() {
+            cpal::SampleFormat::I16 => {
+                device.build_output_stream(
+                    &config,
+                    move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
+                        let synth = synth_clone.lock().unwrap();
+                        synth.write::<&mut [i16]>(data).unwrap();
+                    },
+                    |err| eprintln!("Audio stream error: {}", err),
+                    None,
+                )?
+            }
+            cpal::SampleFormat::F32 => {
+                device.build_output_stream(
+                    &config,
+                    move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                        let synth = synth_clone.lock().unwrap();
+                        synth.write::<&mut [f32]>(data).unwrap();
+                    },
+                    |err| eprintln!("Audio stream error: {}", err),
+                    None,
+                )?
+            }
+            format => {
+                return Err(format!("Unsupported sample format: {:?}", format).into());
+            }
+        };
+        
+        stream.play()?;
+        
         let player = RealtimePlayer {
-            sender,
-            _synth: synth,
+            synth,
+            _stream: stream,
         };
         Ok(PlayerType::Realtime(Box::new(player)))
     }
     
     pub fn create_file_player(output_path: String) -> Result<PlayerType, Box<dyn std::error::Error>> {
-        let synth = XSynthRender::new(Default::default(), WAV_OUTPUT_PATH.into());
+        let settings = Settings::new()?;
+        let synth = Synth::new(settings)?;
+        synth.set_sample_rate(SAMPLE_RATE as f32);
+        
+        let spec = hound::WavSpec {
+            channels: 2,
+            sample_rate: SAMPLE_RATE,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let wav_writer = hound::WavWriter::create(WAV_OUTPUT_PATH, spec)?;
+        
         let player = FilePlayer { 
             synth, 
-            save_path: output_path 
+            save_path: output_path,
+            wav_writer,
         };
         Ok(PlayerType::File(Box::new(player)))
     }

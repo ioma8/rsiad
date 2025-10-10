@@ -2,14 +2,9 @@
 //! 
 //! This library provides audio synthesis capabilities for generating vocal warmup exercises.
 
-pub mod config;
-pub mod render;
-pub mod writer;
 pub mod player;
 pub mod exercises;
 pub mod audio;
-
-use xsynth_core::AudioStreamParams;
 
 // Re-export key types for the public API
 pub use exercises::{ExerciseType, ToneRange};
@@ -64,9 +59,8 @@ impl VocalExerciseEngine {
             OutputMode::File { path } => PlayerFactory::create_file_player(path)?,
         };
         
-        // Get audio parameters and load soundfont
-        let params = AudioStreamParams::new(44100, xsynth_core::ChannelCount::Stereo);
-        player.as_mut().load_soundfont(params);
+        // Load soundfont
+        player.as_mut().load_soundfont();
         
         // Calculate exercise metrics
         let (key_from, key_to) = config.key_range;
