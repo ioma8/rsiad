@@ -17,7 +17,7 @@ pub fn note_string_to_key(note_string: &str) -> u8 {
 
 /// Convert note name and octave to MIDI key number
 pub fn note_to_key(note: &str, octave: u8) -> u8 {
-    let base_key = match note {
+    let base_key: u8 = match note {
         "C" => 24,
         "C#" | "Db" => 25,
         "D" => 26,
@@ -30,9 +30,12 @@ pub fn note_to_key(note: &str, octave: u8) -> u8 {
         "A" => 33,
         "A#" | "Bb" => 34,
         "B" => 35,
-        _ => panic!("Invalid note: {}", note),
+        _ => {
+            eprintln!("Warning: Invalid note '{}', defaulting to C", note);
+            24 // Default to C
+        }
     };
-    base_key + octave * 12
+    base_key.saturating_add(octave.saturating_mul(12))
 }
 
 /// Get the MIDI key range for a vocal range
@@ -49,28 +52,41 @@ pub fn get_tone_range(range: Option<ToneRange>) -> (u8, u8) {
 }
 
 /// Convert WAV file to MP3
-pub fn convert_wav_to_mp3(wav_path: &str, mp3_path: &str) -> Result<(), std::io::Error> {
-    let mut wav_file = File::open(wav_path)?;
+pub fn convert_wav_to_mp3(wav_path: &str, mp3_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let mut wav_file = File::open(wav_path)
+        .map_err(|e| format!("Failed to open WAV file '{}': {}", wav_path, e))?;
     let mut wav_data = Vec::new();
-    wav_file.read_to_end(&mut wav_data)?;
+    wav_file.read_to_end(&mut wav_data)
+        .map_err(|e| format!("Failed to read WAV file: {}", e))?;
 
-    let mut mp3_file = File::create(mp3_path)?;
+    let mut mp3_file = File::create(mp3_path)
+        .map_err(|e| format!("Failed to create MP3 file '{}': {}", mp3_path, e))?;
 
-    let wav = hound::WavReader::new(&wav_data[..]).unwrap();
+    let wav = hound::WavReader::new(&wav_data[..])
+        .map_err(|e| format!("Failed to parse WAV data: {}", e))?;
     let mut samples = wav.into_samples::<i16>();
     let mut pcm_left = Vec::new();
     let mut pcm_right = Vec::new();
 
     while let (Some(left), Some(right)) = (samples.next(), samples.next()) {
-        pcm_left.push(left.unwrap());
-        pcm_right.push(right.unwrap());
+        pcm_left.push(left.map_err(|e| format!("Failed to read sample: {}", e))?);
+        pcm_right.push(right.map_err(|e| format!("Failed to read sample: {}", e))?);
     }
 
-    let mut encoder = Builder::new().expect("Create LAME builder");
-    encoder.set_num_channels(2).unwrap();
-    encoder.set_sample_rate(44100).unwrap();
-    encoder.set_quality(Quality::Best).unwrap();
-    let mut encoder = encoder.build().expect("To create LAME encoder");
+    if pcm_left.is_empty() {
+        return Err("WAV file contains no audio data".into());
+    }
+
+    let mut encoder = Builder::new()
+        .ok_or("Failed to create LAME encoder")?;
+    encoder.set_num_channels(2)
+        .map_err(|e| format!("Failed to set channel count: {:?}", e))?;
+    encoder.set_sample_rate(44100)
+        .map_err(|e| format!("Failed to set sample rate: {:?}", e))?;
+    encoder.set_quality(Quality::Best)
+        .map_err(|e| format!("Failed to set quality: {:?}", e))?;
+    let mut encoder = encoder.build()
+        .map_err(|e| format!("Failed to build LAME encoder: {:?}", e))?;
 
     let input = DualPcm {
         left: &pcm_left,
@@ -79,25 +95,39 @@ pub fn convert_wav_to_mp3(wav_path: &str, mp3_path: &str) -> Result<(), std::io:
 
     let mut mp3_buffer = Vec::new();
     mp3_buffer.resize(mp3lame_encoder::max_required_buffer_size(pcm_left.len()), 0);
-    let mut mp3_buffer_uninit = unsafe {
-        std::mem::transmute::<&mut [u8], &mut [std::mem::MaybeUninit<u8>]>(&mut mp3_buffer)
+    
+    // SAFETY: We're transmuting a slice of u8 to MaybeUninit<u8>, which is always safe
+    // because MaybeUninit<u8> has the same layout as u8
+    let mp3_buffer_uninit = unsafe {
+        std::slice::from_raw_parts_mut(
+            mp3_buffer.as_mut_ptr() as *mut std::mem::MaybeUninit<u8>,
+            mp3_buffer.len()
+        )
     };
 
-    let encoded_size = encoder.encode(input, &mut mp3_buffer_uninit).unwrap();
+    let encoded_size = encoder.encode(input, mp3_buffer_uninit)
+        .map_err(|e| format!("Failed to encode MP3: {:?}", e))?;
     mp3_buffer.truncate(encoded_size);
 
     let mut final_mp3_buffer = Vec::new();
     final_mp3_buffer.resize(7200, 0);
-    let mut final_mp3_buffer_uninit = unsafe {
-        std::mem::transmute::<&mut [u8], &mut [std::mem::MaybeUninit<u8>]>(&mut final_mp3_buffer)
+    
+    // SAFETY: Same as above
+    let final_mp3_buffer_uninit = unsafe {
+        std::slice::from_raw_parts_mut(
+            final_mp3_buffer.as_mut_ptr() as *mut std::mem::MaybeUninit<u8>,
+            final_mp3_buffer.len()
+        )
     };
+    
     let encoded_size = encoder
-        .flush::<FlushNoGap>(&mut final_mp3_buffer_uninit)
-        .unwrap();
+        .flush::<FlushNoGap>(final_mp3_buffer_uninit)
+        .map_err(|e| format!("Failed to flush encoder: {:?}", e))?;
     final_mp3_buffer.truncate(encoded_size);
     mp3_buffer.extend_from_slice(&final_mp3_buffer);
 
-    std::io::Write::write_all(&mut mp3_file, &mp3_buffer)?;
+    std::io::Write::write_all(&mut mp3_file, &mp3_buffer)
+        .map_err(|e| format!("Failed to write MP3 data: {}", e))?;
 
     Ok(())
 }

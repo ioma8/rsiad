@@ -95,6 +95,12 @@ pub fn play_octave(player: &mut dyn Player, key: u8, note_duration: f64) -> bool
 
 /// Exercise range implementations
 pub fn play_triads_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) -> bool {
+    // Validate that we have enough range for a triad (needs 7 semitones)
+    if key_to < key_from || key_to - key_from < 7 {
+        eprintln!("Warning: Invalid key range for triads: {} to {}", key_from, key_to);
+        return false;
+    }
+    
     for i in key_from..=(key_to - 7) {
         if !play_triad(player, i, note_duration) {
             return false; // Stopped
@@ -104,6 +110,12 @@ pub fn play_triads_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_
 }
 
 pub fn play_scales_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) -> bool {
+    // Validate that we have enough range for a scale to 5th (needs 7 semitones)
+    if key_to < key_from || key_to - key_from < 7 {
+        eprintln!("Warning: Invalid key range for scales: {} to {}", key_from, key_to);
+        return false;
+    }
+    
     for i in key_from..=(key_to - 7) {
         if !play_scale(player, i, note_duration) {
             return false; // Stopped
@@ -113,6 +125,12 @@ pub fn play_scales_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_
 }
 
 pub fn play_octaves_from(player: &mut dyn Player, key_from: u8, key_to: u8, note_duration: f64) -> bool {
+    // Validate that we have enough range for octaves (needs 12 semitones)
+    if key_to < key_from || key_to - key_from < 12 {
+        eprintln!("Warning: Invalid key range for octaves: {} to {}", key_from, key_to);
+        return false;
+    }
+    
     for i in key_from..=(key_to - 12) {
         if !play_octave(player, i, note_duration) {
             return false; // Stopped

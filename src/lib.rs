@@ -60,7 +60,7 @@ impl VocalExerciseEngine {
         };
         
         // Load soundfont
-        player.as_mut().load_soundfont();
+        player.as_mut().load_soundfont(&self.soundfont_path)?;
         
         // Calculate exercise metrics
         let (key_from, key_to) = config.key_range;
