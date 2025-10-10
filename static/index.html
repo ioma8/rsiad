@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="RSIAD">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#89b4fa">
+    <title>RSIAD - Vocal Warmup</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1e1e2e 0%, #181825 100%);
+            color: #cdd6f4;
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 32px;
+            color: #89b4fa;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #bac2de;
+            font-size: 14px;
+        }
+
+        .card {
+            background: #313244;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #89b4fa;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #bac2de;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .radio-option {
+            flex: 1;
+            min-width: 90px;
+        }
+
+        .radio-option input[type="radio"] {
+            display: none;
+        }
+
+        .radio-option label {
+            display: block;
+            padding: 10px 16px;
+            background: #45475a;
+            border: 2px solid transparent;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin: 0;
+            font-weight: 600;
+        }
+
+        .radio-option input[type="radio"]:checked + label {
+            background: #89b4fa;
+            color: #1e1e2e;
+            border-color: #89b4fa;
+        }
+
+        select, input[type="number"], input[type="range"] {
+            width: 100%;
+            padding: 12px;
+            background: #45475a;
+            border: 2px solid transparent;
+            border-radius: 8px;
+            color: #cdd6f4;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #89b4fa;
+        }
+
+        .range-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .slider-container {
+            margin-top: 8px;
+        }
+
+        .slider-value {
+            display: inline-block;
+            margin-left: 8px;
+            color: #89b4fa;
+            font-weight: 600;
+        }
+
+        input[type="range"] {
+            padding: 0;
+            height: 6px;
+            background: #45475a;
+            border-radius: 3px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #89b4fa;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        button {
+            padding: 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #a6e3a1;
+            color: #1e1e2e;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #94d890;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: #89b4fa;
+            color: #1e1e2e;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #74c7ec;
+            transform: translateY(-1px);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            background: #313244;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+            border-left: 4px solid #89b4fa;
+        }
+
+        .status.error {
+            border-left-color: #f38ba8;
+        }
+
+        .status.success {
+            border-left-color: #a6e3a1;
+        }
+
+        .status-icon {
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .info-text {
+            font-size: 12px;
+            color: #bac2de;
+            margin-top: 8px;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 16px;
+            }
+
+            h1 {
+                font-size: 28px;
+            }
+
+            .button-group {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #1e1e2e;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎵 RSIAD</h1>
+            <p class="subtitle">Vocal Warmup Exercise Generator</p>
+        </div>
+
+        <div class="card">
+            <div class="card-title">⚙️ Exercise Settings</div>
+            
+            <div class="form-group">
+                <label>Exercise Type</label>
+                <div class="radio-group">
+                    <div class="radio-option">
+                        <input type="radio" id="triads" name="exercise" value="triads" checked>
+                        <label for="triads">Triads</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="scales" name="exercise" value="scales">
+                        <label for="scales">Scales</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="octaves" name="exercise" value="octaves">
+                        <label for="octaves">Octaves</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Vocal Range</label>
+                <select id="vocalRange" onchange="updateRange()">
+                    <option value="custom">Custom</option>
+                    <option value="bass">Bass (E2-E4)</option>
+                    <option value="baritone" selected>Baritone (A2-A4)</option>
+                    <option value="tenor">Tenor (C3-C5)</option>
+                    <option value="alto">Alto (F3-F5)</option>
+                    <option value="mezzo">Mezzo-Soprano (A3-A5)</option>
+                    <option value="soprano">Soprano (C4-C6)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Range (MIDI Keys)</label>
+                <div class="range-inputs">
+                    <input type="number" id="keyFrom" value="57" min="21" max="108" placeholder="From">
+                    <input type="number" id="keyTo" value="81" min="21" max="108" placeholder="To">
+                </div>
+                <p class="info-text" id="rangeInfo">A2 (57) → A4 (81)</p>
+            </div>
+
+            <div class="form-group">
+                <label>
+                    Note Duration
+                    <span class="slider-value" id="durationValue">0.8s</span>
+                </label>
+                <input type="range" id="duration" min="0.1" max="2.0" step="0.1" value="0.8" 
+                       oninput="document.getElementById('durationValue').textContent = this.value + 's'">
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button class="btn-primary" onclick="playExercise()" id="playBtn">
+                <span>▶</span> Play
+            </button>
+            <button class="btn-secondary" onclick="saveExercise()" id="saveBtn">
+                <span>💾</span> Save MP3
+            </button>
+        </div>
+
+        <div id="status" style="display: none;"></div>
+    </div>
+
+    <script>
+        const ranges = {
+            bass: [40, 64],      // E2-E4
+            baritone: [57, 81],  // A2-A4
+            tenor: [60, 84],     // C3-C5
+            alto: [65, 89],      // F3-F5
+            mezzo: [69, 93],     // A3-A5
+            soprano: [72, 96]    // C4-C6
+        };
+
+        const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        
+        function midiToNote(midi) {
+            const octave = Math.floor(midi / 12) - 1;
+            const note = noteNames[midi % 12];
+            return `${note}${octave}`;
+        }
+
+        function updateRange() {
+            const select = document.getElementById('vocalRange');
+            const range = select.value;
+            
+            if (range !== 'custom' && ranges[range]) {
+                document.getElementById('keyFrom').value = ranges[range][0];
+                document.getElementById('keyTo').value = ranges[range][1];
+                updateRangeInfo();
+            }
+        }
+
+        function updateRangeInfo() {
+            const from = parseInt(document.getElementById('keyFrom').value);
+            const to = parseInt(document.getElementById('keyTo').value);
+            const info = document.getElementById('rangeInfo');
+            info.textContent = `${midiToNote(from)} (${from}) → ${midiToNote(to)} (${to})`;
+        }
+
+        document.getElementById('keyFrom').addEventListener('input', updateRangeInfo);
+        document.getElementById('keyTo').addEventListener('input', updateRangeInfo);
+
+        function showStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            const icons = { success: '✅', error: '⚠️', info: 'ℹ️', loading: '⏳' };
+            status.className = `status ${type}`;
+            status.innerHTML = `<span class="status-icon">${icons[type]}</span>${message}`;
+            status.style.display = 'block';
+        }
+
+        function setButtonsEnabled(enabled) {
+            document.getElementById('playBtn').disabled = !enabled;
+            document.getElementById('saveBtn').disabled = !enabled;
+        }
+
+        async function playExercise() {
+            const exercise = document.querySelector('input[name="exercise"]:checked').value;
+            const keyFrom = parseInt(document.getElementById('keyFrom').value);
+            const keyTo = parseInt(document.getElementById('keyTo').value);
+            const duration = parseFloat(document.getElementById('duration').value);
+
+            setButtonsEnabled(false);
+            showStatus('Playing exercise...', 'loading');
+
+            try {
+                const response = await fetch('/api/exercise', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        exercise_type: exercise,
+                        key_from: keyFrom,
+                        key_to: keyTo,
+                        note_duration: duration,
+                        realtime: true
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus(`Exercise completed! Played ${result.notes_played} notes.`, 'success');
+                } else {
+                    showStatus(result.message, 'error');
+                }
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+            } finally {
+                setButtonsEnabled(true);
+            }
+        }
+
+        async function saveExercise() {
+            const exercise = document.querySelector('input[name="exercise"]:checked').value;
+            const keyFrom = parseInt(document.getElementById('keyFrom').value);
+            const keyTo = parseInt(document.getElementById('keyTo').value);
+            const duration = parseFloat(document.getElementById('duration').value);
+
+            setButtonsEnabled(false);
+            showStatus('Generating MP3...', 'loading');
+
+            try {
+                const response = await fetch('/api/exercise', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        exercise_type: exercise,
+                        key_from: keyFrom,
+                        key_to: keyTo,
+                        note_duration: duration,
+                        realtime: false,
+                        output_path: 'output.mp3'
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus(`MP3 saved successfully! (${result.notes_played} notes)`, 'success');
+                } else {
+                    showStatus(result.message, 'error');
+                }
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+            } finally {
+                setButtonsEnabled(true);
+            }
+        }
+
+        // Initialize
+        updateRangeInfo();
+    </script>
+</body>
+</html>

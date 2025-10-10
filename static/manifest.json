@@ -1,0 +1,24 @@
+{
+  "name": "RSIAD Vocal Warmup",
+  "short_name": "RSIAD",
+  "description": "Professional vocal warmup exercise generator",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1e1e2e",
+  "theme_color": "#89b4fa",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["music", "education"],
+  "screenshots": []
+}
