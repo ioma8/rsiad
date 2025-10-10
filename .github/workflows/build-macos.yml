@@ -1,0 +1,87 @@
+name: Build macOS App
+
+on:
+  push:
+    branches: [ main, library-refactor ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    name: Build macOS App Bundle
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo build
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Build GUI
+      run: cargo build --release --bin rsiad-gui
+    
+    - name: Build CLI
+      run: cargo build --release --bin rsiad
+    
+    - name: Create macOS App Bundle
+      run: |
+        chmod +x build-macos-app.sh
+        ./build-macos-app.sh
+    
+    - name: Create distribution archive
+      run: |
+        cd dist
+        zip -r RSIAD-macOS.zip RSIAD.app
+        cd ..
+        mkdir -p artifacts
+        cp dist/RSIAD-macOS.zip artifacts/
+        cp dist/macos-binaries/rsiad-gui artifacts/rsiad-gui-macos
+        cp dist/macos-binaries/rsiad artifacts/rsiad-cli-macos
+    
+    - name: Upload App Bundle
+      uses: actions/upload-artifact@v3
+      with:
+        name: RSIAD-macOS-App
+        path: artifacts/RSIAD-macOS.zip
+    
+    - name: Upload GUI Binary
+      uses: actions/upload-artifact@v3
+      with:
+        name: rsiad-gui-macos
+        path: artifacts/rsiad-gui-macos
+    
+    - name: Upload CLI Binary
+      uses: actions/upload-artifact@v3
+      with:
+        name: rsiad-cli-macos
+        path: artifacts/rsiad-cli-macos
+    
+    - name: Display build info
+      run: |
+        echo "📦 Build complete!"
+        ls -lh artifacts/
+        file artifacts/rsiad-gui-macos
+        file artifacts/rsiad-cli-macos

@@ -3,3 +3,4 @@ tmp/
 *.mp3
 *.wav
 .DS_Store
+dist/
